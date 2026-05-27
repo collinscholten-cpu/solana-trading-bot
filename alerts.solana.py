@@ -19,38 +19,48 @@ cg = CoinGeckoAPI()
 # ✅ STATE
 trading_active = True
 trade_log = []
-
 last_buy_price = None
 last_action = None
 last_update_id = None
 STOP_LOSS_PERCENT = 0.04
 
 # =============================
-# ✅ TELEGRAM
+# 📩 TELEGRAM
 # =============================
 def send(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message})
 
+# ✅ FIXED → leest ALLE berichten (geen gemiste updates)
 def check_messages():
     global last_update_id
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
-    if last_update_id:
-        url += f"?offset={last_update_id + 1}"
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
+        if last_update_id:
+            url += f"?offset={last_update_id + 1}"
 
-    data = requests.get(url).json()
+        data = requests.get(url).json()
 
-    if not data["result"]:
-        return None
+        if not data["result"]:
+            return []
 
-    update = data["result"][-1]
-    last_update_id = update["update_id"]
+        messages = []
 
-    return update["message"]["text"].strip().lower()
+        for update in data["result"]:
+            last_update_id = update["update_id"]
+
+            if "message" in update and "text" in update["message"]:
+                messages.append(update["message"]["text"].strip().lower())
+
+        return messages
+
+    except Exception as e:
+        print("Telegram fout:", e)
+        return []
 
 # =============================
-# ✅ BITVAVO API
+# 📡 BITVAVO
 # =============================
 def bitvavo_request(method, endpoint, body=None):
     timestamp = str(int(time.time() * 1000))
@@ -82,7 +92,7 @@ def bitvavo_request(method, endpoint, body=None):
     return r.json()
 
 # =============================
-# ✅ BALANCES (NIEUW)
+# 💰 BALANCES
 # =============================
 def get_balances():
     balances = bitvavo_request("GET", "/v2/balance")
@@ -93,7 +103,7 @@ def get_balances():
     return eur, sol
 
 # =============================
-# ✅ DATA
+# 📊 DATA
 # =============================
 def get_price():
     return cg.get_price(ids='solana', vs_currencies='eur')['solana']['eur']
@@ -174,7 +184,7 @@ def sell_all():
         trade_log.append(f"SELL @ €{price:.2f}")
 
 # =============================
-# ✅ MAIN
+# 🔁 MAIN
 # =============================
 def main():
     global trading_active, last_buy_price, last_action
@@ -183,7 +193,7 @@ def main():
 
     while True:
         try:
-            msg = check_messages()
+            messages = check_messages()
 
             # ✅ STOP-LOSS
             if last_buy_price and get_price() < last_buy_price * (1 - STOP_LOSS_PERCENT):
@@ -201,9 +211,8 @@ def main():
 
             advies = bepaal_signaal(sol_prices, sol_trend, btc_trend)
 
-            # ✅ AUTO TRADING (ZONDER AUTO BUY MESSAGE)
+            # ✅ AUTO TRADING (zonder spam melding)
             if trading_active:
-
                 if advies == "BUY" and last_buy_price is None and last_action != "BUY":
                     last_buy_price = sol_price
                     last_action = "BUY"
@@ -215,7 +224,7 @@ def main():
             # =============================
             # ✅ COMMANDS
             # =============================
-            if msg:
+            for msg in messages:
 
                 if "/saldo" in msg:
                     eur, _ = get_balances()
@@ -237,13 +246,11 @@ def main():
                     eur, sol = get_balances()
                     totaal = eur + (sol * sol_price)
 
-                    # ✅ BITVAVO STATUS
                     if sol > 0.001:
                         positie_status = "Status Bitvavo: BUY"
                     else:
                         positie_status = "Status Bitvavo: SELL"
 
-                    # ✅ SIGNAAL
                     if advies == "BUY":
                         signaal = "🟢 BUY — Kans omhoog"
                     elif advies == "SELL":
@@ -282,8 +289,6 @@ def main():
 
         time.sleep(30)
 
-# =============================
 # ▶️ START
-# =============================
-if __name__ == "__main__":
+if name == "main":
     main()
