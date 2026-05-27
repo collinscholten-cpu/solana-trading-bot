@@ -190,6 +190,9 @@ def main():
 
                 if advies == "BUY" and last_buy_price is None and last_action != "BUY":
                     send("🤖 AUTO BUY")
+                    last_buy_price = get_price()   # ✅ LOCK VOORAF
+                    last_action = "BUY"
+                    send("🤖 AUTO BUY")
                     buy_all()
 
                 elif advies == "SELL" and last_buy_price is not None and get_price() > last_buy_price and last_action != "SELL":
