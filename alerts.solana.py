@@ -220,17 +220,18 @@ def main():
     send("🤖 Bot live met stop-loss!")
 
     while True:
-        try:
-            msg = check_messages()
+    try:
+        msg = check_messages()
 
-            # ✅ STOP-LOSS CHECK
-            if last_buy_price:
-                current_price = get_price()
+        # ✅ STOP-LOSS CHECK
+        if last_buy_price:
+            current_price = get_price()
 
-                if current_price < last_buy_price * (1 - STOP_LOSS_PERCENT):
-                    send(f"🚨 STOP-LOSS geraakt!\nVerkoop bij €{current_price:.2f}")
-                    sell_all()
-# ✅ AUTOMATISCHE ANALYSE + TRADING
+            if current_price < last_buy_price * (1 - STOP_LOSS_PERCENT):
+                send(f"🚨 STOP-LOSS geraakt!\nVerkoop bij €{current_price:.2f}")
+                sell_all()
+
+        # ✅ AUTOMATISCHE ANALYSE + TRADING
         sol_price = get_price()
         sol_prices = get_history('solana', 30)
         btc_prices = get_history('bitcoin', 30)
@@ -243,75 +244,50 @@ def main():
         )
 
         # ✅ AUTO TRADING (met pauze knop!)
-if trading_active:
+        if trading_active:
 
-    if advies == "BUY" and last_buy_price is None:
-        send("🤖 AUTO BUY")
-        buy_all()
+            if advies == "BUY" and last_buy_price is None:
+                send("🤖 AUTO BUY")
+                buy_all()
 
-    elif advies == "SELL" and last_buy_price is not None:
-        send("🤖 AUTO SELL")
-        sell_all()
+            elif advies == "SELL" and last_buy_price is not None:
+                send("🤖 AUTO SELL")
+                sell_all()
 
-            if msg:
+        # ✅ TELEGRAM COMMANDS
+        if msg:
 
-                if msg == "/saldo":
-                    balances = bitvavo_request("GET", "/v2/balance")
-                    text = "\n".join(
-                        [f"{b['symbol']}: {b['available']}" for b in balances if float(b['available']) > 0]
-                    )
-                    send(text)
+            if msg == "/saldo":
+                balances = bitvavo_request("GET", "/v2/balance")
+                text = "\n".join(
+                    [f"{b['symbol']}: {b['available']}" for b in balances if float(b['available']) > 0]
+                )
+                send(text)
 
-                elif msg == "/log":
-                    send("\n".join(trade_log[-5:]) or "Geen trades")
+            elif msg == "/log":
+                send("\n".join(trade_log[-5:]) or "Geen trades")
 
-                elif msg == "/update":
+            elif msg == "/update":
+                send("🔄 Update gevraagd")
 
-                    sol_price = get_price()
-                    sol_prices = get_history('solana', 30)
-                    btc_prices = get_history('bitcoin', 30)
-                    eth_prices = get_history('ethereum', 30)
+            elif msg == "/buy":
+                buy_all()
 
-                    sol_trend = bepaal_trend(sol_prices)
-                    btc_trend = bepaal_trend(btc_prices)
-                    eth_trend = bepaal_trend(eth_prices)
+            elif msg == "/sell":
+                sell_all()
 
-                    advies, uitleg, support, resistance = bepaal_signaal(
-                        sol_prices, sol_trend, btc_trend
-                    )
-# ✅ AUTO TRADING
-    if advies == "BUY" and last_buy_price is None:
-        send("🤖 Auto BUY signaal")
-        buy_all()
+            elif msg == "/stop":
+                trading_active = False
+                send("⏸ Bot gepauzeerd")
 
-    elif advies == "SELL" and last_buy_price is not None:
-        send("🤖 Auto SELL signaal")
-        sell_all()
-                    signaal = "🟢 BUY" if advies == "BUY" else ("🔴 SELL" if advies == "SELL" else "⏸ WAIT")
+            elif msg == "/start":
+                trading_active = True
+                send("▶️ Bot actief")
 
-                    now = datetime.now().strftime("%d-%m-%Y %H:%M")
+    except Exception as e:
+        print("Fout:", e)
 
-                    bericht = (
-                        f"*Solana {now}:*\n\n"
-                        f"*Koers:* €{sol_price:.2f}\n"
-                        f"*Signaal:* {signaal} — {uitleg}\n\n"
-                        f"*SOL trend:* {sol_trend}\n"
-                        f"*BTC trend:* {btc_trend}\n"
-                        f"*ETH trend:* {eth_trend}\n"
-                    )
-
-                    send(bericht)
-
-                elif msg == "/buy":
-                    buy_all()
-
-                elif msg == "/sell":
-                    sell_all()
-
-        except Exception as e:
-            print("Fout:", e)
-
-        time.sleep(5)
+    time.sleep(5)
 
 # ▶️ START
 if __name__ == "__main__":
