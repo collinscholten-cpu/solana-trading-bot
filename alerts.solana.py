@@ -257,7 +257,14 @@ def main():
                     advies, uitleg, support, resistance = bepaal_signaal(
                         sol_prices, sol_trend, btc_trend
                     )
+# ✅ AUTO TRADING
+    if advies == "BUY" and last_buy_price is None:
+        send("🤖 Auto BUY signaal")
+        buy_all()
 
+    elif advies == "SELL" and last_buy_price is not None:
+        send("🤖 Auto SELL signaal")
+        sell_all()
                     signaal = "🟢 BUY" if advies == "BUY" else ("🔴 SELL" if advies == "SELL" else "⏸ WAIT")
 
                     now = datetime.now().strftime("%d-%m-%Y %H:%M")
