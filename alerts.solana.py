@@ -8,7 +8,9 @@ from datetime import datetime
 from pycoingecko import CoinGeckoAPI
 from dotenv import load_dotenv
 
-# ✅ LOAD ENV
+# =============================
+# ✅ LOAD ENV (lokaal + Railway)
+# =============================
 load_dotenv()
 
 API_KEY = os.getenv("API_KEY")
@@ -23,7 +25,7 @@ trading_active = True
 trade_log = []
 
 # =============================
-# 📩 SEND
+# 📩 TELEGRAM SEND
 # =============================
 def send(message):
     url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
@@ -35,7 +37,7 @@ def send(message):
     requests.post(url, data=payload)
 
 # =============================
-# 📥 TELEGRAM
+# 📥 TELEGRAM MESSAGES
 # =============================
 def check_messages():
     global last_update_id
@@ -54,19 +56,18 @@ def check_messages():
 
             if "message" in update and "text" in update["message"]:
                 return update["message"]["text"].strip().lower()
-
     except Exception as e:
         print("Telegram fout:", e)
 
     return None
 
 # =============================
-# ✅ BITVAVO REQUEST
+# ✅ BITVAVO API (FIXED)
 # =============================
 def bitvavo_request(method, endpoint, body=None):
     timestamp = str(int(time.time() * 1000))
-
     body_str = json.dumps(body) if body else ""
+
     message = timestamp + method + endpoint + body_str
 
     signature = hmac.new(
@@ -108,9 +109,6 @@ def get_history(coin, days):
 # 📈 TREND
 # =============================
 def bepaal_trend(prices):
-    if len(prices) < 2:
-        return "onbekend"
-
     change = (prices[-1] - prices[0]) / prices[0] * 100
 
     if change > 3:
@@ -148,7 +146,6 @@ def buy_all():
             "orderType": "market",
             "amountQuote": str(eur)
         }
-
         bitvavo_request("POST", "/v2/order", body)
         trade_log.append(f"BUY €{eur} @ {datetime.now().strftime('%H:%M')}")
         send("✅ BUY uitgevoerd")
@@ -167,13 +164,12 @@ def sell_all():
             "orderType": "market",
             "amount": str(sol)
         }
-
         bitvavo_request("POST", "/v2/order", body)
         trade_log.append(f"SELL {sol} SOL @ {datetime.now().strftime('%H:%M')}")
         send("✅ SELL uitgevoerd")
 
 # =============================
-# 🔁 MAIN
+# 🔁 MAIN LOOP
 # =============================
 def main():
     global trading_active
@@ -260,6 +256,9 @@ def main():
 
         time.sleep(10)
 
+# =============================
 # ▶️ START
+# =============================
 if __name__ == "__main__":
     main()
+``
