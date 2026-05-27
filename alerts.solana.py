@@ -24,7 +24,6 @@ last_update_id = None
 trading_active = True
 trade_log = []
 
-# ✅ STOP-LOSS
 last_buy_price = None
 STOP_LOSS_PERCENT = 0.04
 
@@ -175,7 +174,8 @@ def buy_all():
             "amountQuote": str(eur)
         }
 
-        bitvavo_request("POST", "/v2/order", body)
+        response = bitvavo_request("POST", "/v2/order", body)
+        print("BUY response:", response)  # ✅ AANGEPAST
 
         last_buy_price = price
         trade_log.append(f"BUY €{eur} @ {price:.2f}")
@@ -201,7 +201,8 @@ def sell_all():
             "amount": str(sol)
         }
 
-        bitvavo_request("POST", "/v2/order", body)
+        response = bitvavo_request("POST", "/v2/order", body)
+        print("SELL response:", response)  # ✅ AANGEPAST
 
         trade_log.append(f"SELL @ €{price:.2f}")
         last_buy_price = None
@@ -220,7 +221,6 @@ def main():
         try:
             msg = check_messages()
 
-            # ✅ STOP-LOSS
             if last_buy_price:
                 current_price = get_price()
 
@@ -228,7 +228,6 @@ def main():
                     send(f"🚨 STOP-LOSS!\n€{current_price:.2f}")
                     sell_all()
 
-            # ✅ AUTO TRADING
             sol_price = get_price()
             sol_prices = get_history('solana', 30)
             btc_prices = get_history('bitcoin', 30)
@@ -246,11 +245,11 @@ def main():
                     send("🤖 AUTO BUY")
                     buy_all()
 
-                elif advies == "SELL" and last_buy_price is not None:
+                # ✅ AANGEPAST (niet meer direct verkopen)
+                elif advies == "SELL" and last_buy_price is not None and get_price() > last_buy_price:
                     send("🤖 AUTO SELL")
                     sell_all()
 
-            # ✅ COMMANDS
             if msg:
 
                 if msg == "/saldo":
