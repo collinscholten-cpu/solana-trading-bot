@@ -24,7 +24,7 @@ last_update_id = None
 trading_active = True
 trade_log = []
 
-# ✅ NIEUW
+# ✅ STOP-LOSS
 last_buy_price = None
 STOP_LOSS_PERCENT = 0.04
 
@@ -73,7 +73,7 @@ def check_messages():
     return None
 
 # =============================
-# ✅ BITVAVO REQUEST
+# ✅ BITVAVO API
 # =============================
 def bitvavo_request(method, endpoint, body=None):
     timestamp = str(int(time.time() * 1000))
@@ -129,7 +129,7 @@ def bepaal_trend(prices):
     return "neutraal"
 
 # =============================
-# 🧠 SIGNALEN (SLIMMER + VEILIG)
+# 🧠 SIGNALEN
 # =============================
 def bepaal_signaal(prices, sol_trend, btc_trend):
     current = prices[-1]
@@ -142,7 +142,6 @@ def bepaal_signaal(prices, sol_trend, btc_trend):
     near_support = afstand_support < 2
     near_resistance = afstand_resistance < 2
 
-    # ✅ SLIMME BUY (MET EXTRA VEILIGHEID)
     if near_support and btc_trend != "dalend" and sol_trend != "dalend":
         return "BUY", "Goede prijs nabij support", support, resistance
 
@@ -150,7 +149,7 @@ def bepaal_signaal(prices, sol_trend, btc_trend):
         return "BUY", "Trend omhoog", support, resistance
 
     if btc_trend == "dalend" and near_resistance:
-        return "SELL", "Topbereik in zwakke markt", support, resistance
+        return "SELL", "Topbereik", support, resistance
 
     if btc_trend == "dalend":
         return "SELL", "Markt zwak", support, resistance
@@ -179,10 +178,9 @@ def buy_all():
         bitvavo_request("POST", "/v2/order", body)
 
         last_buy_price = price
-
         trade_log.append(f"BUY €{eur} @ {price:.2f}")
 
-        send(f"✅ BUY @ €{price:.2f}\nStop-loss actief (-4%)")
+        send(f"✅ BUY @ €{price:.2f}")
 
 # =============================
 # ✅ SELL
@@ -206,7 +204,6 @@ def sell_all():
         bitvavo_request("POST", "/v2/order", body)
 
         trade_log.append(f"SELL @ €{price:.2f}")
-
         last_buy_price = None
 
         send(f"✅ SELL @ €{price:.2f}")
@@ -217,77 +214,67 @@ def sell_all():
 def main():
     global trading_active
 
-    send("🤖 Bot live met stop-loss!")
+    send("🤖 Bot live 🚀")
 
     while True:
-    try:
-        msg = check_messages()
+        try:
+            msg = check_messages()
 
-        # ✅ STOP-LOSS CHECK
-        if last_buy_price:
-            current_price = get_price()
+            # ✅ STOP-LOSS
+            if last_buy_price:
+                current_price = get_price()
 
-            if current_price < last_buy_price * (1 - STOP_LOSS_PERCENT):
-                send(f"🚨 STOP-LOSS geraakt!\nVerkoop bij €{current_price:.2f}")
-                sell_all()
+                if current_price < last_buy_price * (1 - STOP_LOSS_PERCENT):
+                    send(f"🚨 STOP-LOSS!\n€{current_price:.2f}")
+                    sell_all()
 
-        # ✅ AUTOMATISCHE ANALYSE + TRADING
-        sol_price = get_price()
-        sol_prices = get_history('solana', 30)
-        btc_prices = get_history('bitcoin', 30)
+            # ✅ AUTO TRADING
+            sol_price = get_price()
+            sol_prices = get_history('solana', 30)
+            btc_prices = get_history('bitcoin', 30)
 
-        sol_trend = bepaal_trend(sol_prices)
-        btc_trend = bepaal_trend(btc_prices)
+            sol_trend = bepaal_trend(sol_prices)
+            btc_trend = bepaal_trend(btc_prices)
 
-        advies, uitleg, support, resistance = bepaal_signaal(
-            sol_prices, sol_trend, btc_trend
-        )
+            advies, uitleg, support, resistance = bepaal_signaal(
+                sol_prices, sol_trend, btc_trend
+            )
 
-        # ✅ AUTO TRADING (met pauze knop!)
-        if trading_active:
+            if trading_active:
 
-            if advies == "BUY" and last_buy_price is None:
-                send("🤖 AUTO BUY")
-                buy_all()
+                if advies == "BUY" and last_buy_price is None:
+                    send("🤖 AUTO BUY")
+                    buy_all()
 
-            elif advies == "SELL" and last_buy_price is not None:
-                send("🤖 AUTO SELL")
-                sell_all()
+                elif advies == "SELL" and last_buy_price is not None:
+                    send("🤖 AUTO SELL")
+                    sell_all()
 
-        # ✅ TELEGRAM COMMANDS
-        if msg:
+            # ✅ COMMANDS
+            if msg:
 
-            if msg == "/saldo":
-                balances = bitvavo_request("GET", "/v2/balance")
-                text = "\n".join(
-                    [f"{b['symbol']}: {b['available']}" for b in balances if float(b['available']) > 0]
-                )
-                send(text)
+                if msg == "/saldo":
+                    balances = bitvavo_request("GET", "/v2/balance")
+                    text = "\n".join(
+                        [f"{b['symbol']}: {b['available']}" for b in balances if float(b['available']) > 0]
+                    )
+                    send(text)
 
-            elif msg == "/log":
-                send("\n".join(trade_log[-5:]) or "Geen trades")
+                elif msg == "/log":
+                    send("\n".join(trade_log[-5:]) or "Geen trades")
 
-            elif msg == "/update":
-                send("🔄 Update gevraagd")
+                elif msg == "/stop":
+                    trading_active = False
+                    send("⏸ Bot gepauzeerd")
 
-            elif msg == "/buy":
-                buy_all()
+                elif msg == "/start":
+                    trading_active = True
+                    send("▶️ Bot actief")
 
-            elif msg == "/sell":
-                sell_all()
+        except Exception as e:
+            print("Fout:", e)
 
-            elif msg == "/stop":
-                trading_active = False
-                send("⏸ Bot gepauzeerd")
-
-            elif msg == "/start":
-                trading_active = True
-                send("▶️ Bot actief")
-
-    except Exception as e:
-        print("Fout:", e)
-
-    time.sleep(5)
+        time.sleep(5)
 
 # ▶️ START
 if __name__ == "__main__":
