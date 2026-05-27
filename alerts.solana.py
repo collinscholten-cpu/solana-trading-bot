@@ -143,7 +143,7 @@ def buy_all():
             "market": "SOL-EUR",
             "side": "buy",
             "orderType": "market",
-            "amountQuote": str(eur)
+            "amountQuote": str(eur),
             "clientOrderId": str(int(time.time() * 1000))
         }
 
@@ -171,7 +171,7 @@ def sell_all():
             "market": "SOL-EUR",
             "side": "sell",
             "orderType": "market",
-            "amount": str(sol)
+            "amount": str(sol),
             "clientOrderId": str(int(time.time() * 1000))
         }
 
