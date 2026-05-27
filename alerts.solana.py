@@ -233,7 +233,7 @@ def main():
         except Exception as e:
             print("Fout:", e)
 
-        time.sleep(15)
+        time.sleep(30)
 
 if __name__ == "__main__":
     main()
