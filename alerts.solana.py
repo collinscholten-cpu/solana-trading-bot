@@ -216,6 +216,8 @@ def main():
                 if advies == "BUY" and last_buy_price is None:
                     send("🤖 AUTO BUY")
                     buy_all()
+                    if last_buy_price: pass
+
 
                 elif advies == "SELL" and last_buy_price is not None and get_price() > last_buy_price:
                     send("🤖 AUTO SELL")
