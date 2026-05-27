@@ -172,6 +172,7 @@ def sell_all():
             "side": "sell",
             "orderType": "market",
             "amount": str(sol)
+            "clientOrderId": str(int(time.time() * 1000))
         }
 
         response = bitvavo_request("POST", "/v2/order", body)
