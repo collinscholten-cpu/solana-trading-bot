@@ -169,6 +169,7 @@ def main():
 
     while True:
         try:
+            msg = check_messages()
             # STOP-LOSS
             if last_buy_price:
                 current_price = get_price()
@@ -197,7 +198,27 @@ def main():
                 elif advies == "SELL" and last_buy_price is not None and get_price() > last_buy_price and last_action != "SELL":
                     send("🤖 AUTO SELL")
                     sell_all()
+            # ✅ TELEGRAM COMMANDS
+            if msg:
 
+                if msg == "/saldo":
+                balances = bitvavo_request("GET", "/v2/balance")
+                text = "\n".join(
+                [f"{b['symbol']}: {b['available']}" for b in balances if float(b['available']) > 0]
+                )
+            send(text)
+
+            elif msg == "/log":
+            send("\n".join(trade_log[-5:]) or "Geen trades")
+
+            elif msg == "/stop":
+             trading_active = False
+            send("⏸ Bot gepauzeerd")
+
+            elif msg == "/start":
+            trading_active = True
+            send("▶️ Bot actief")
+        
         except Exception as e:
             print("Fout:", e)
 
