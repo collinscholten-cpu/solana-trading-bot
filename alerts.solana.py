@@ -290,5 +290,5 @@ def main():
         time.sleep(30)
 
 # ▶️ START
-if name == "main":
+if name == "__main__":
     main()
