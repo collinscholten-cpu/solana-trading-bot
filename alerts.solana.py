@@ -64,7 +64,7 @@ def check_messages():
 # =============================
 def bitvavo_request(method, endpoint, body=None):
     timestamp = str(int(time.time() * 1000))
-    body_str = json.dumps(body) if body else ""
+    body_str = json.dumps(body, separators=(',', ':')) if body else ""
 
     message = timestamp + method + endpoint + body_str
 
