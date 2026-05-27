@@ -242,15 +242,17 @@ def main():
             sol_prices, sol_trend, btc_trend
         )
 
-        # ✅ AUTO TRADING
-        if advies == "BUY" and last_buy_price is None:
-            send("🤖 AUTO BUY")
-            buy_all()
+        # ✅ AUTO TRADING (met pauze knop!)
+if trading_active:
 
-        elif advies == "SELL" and last_buy_price is not None:
-            send("🤖 AUTO SELL")
-            sell_all()
-``
+    if advies == "BUY" and last_buy_price is None:
+        send("🤖 AUTO BUY")
+        buy_all()
+
+    elif advies == "SELL" and last_buy_price is not None:
+        send("🤖 AUTO SELL")
+        sell_all()
+
             if msg:
 
                 if msg == "/saldo":
