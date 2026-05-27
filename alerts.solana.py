@@ -230,7 +230,27 @@ def main():
                 if current_price < last_buy_price * (1 - STOP_LOSS_PERCENT):
                     send(f"🚨 STOP-LOSS geraakt!\nVerkoop bij €{current_price:.2f}")
                     sell_all()
+# ✅ AUTOMATISCHE ANALYSE + TRADING
+        sol_price = get_price()
+        sol_prices = get_history('solana', 30)
+        btc_prices = get_history('bitcoin', 30)
 
+        sol_trend = bepaal_trend(sol_prices)
+        btc_trend = bepaal_trend(btc_prices)
+
+        advies, uitleg, support, resistance = bepaal_signaal(
+            sol_prices, sol_trend, btc_trend
+        )
+
+        # ✅ AUTO TRADING
+        if advies == "BUY" and last_buy_price is None:
+            send("🤖 AUTO BUY")
+            buy_all()
+
+        elif advies == "SELL" and last_buy_price is not None:
+            send("🤖 AUTO SELL")
+            sell_all()
+``
             if msg:
 
                 if msg == "/saldo":
