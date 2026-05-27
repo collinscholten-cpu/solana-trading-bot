@@ -42,20 +42,21 @@ def send(message):
 def check_messages():
     global last_update_id
 
-    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates?limit=1'
-
     try:
-        response = requests.get(url, timeout=10)
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
+        response = requests.get(url)
         data = response.json()
 
-        if data["result"]:
-            update = data["result"][-1]
+        if not data["result"]:
+            return None
 
-            if update["update_id"] != last_update_id:
-                last_update_id = update["update_id"]
+        update = data["result"][-1]
 
-                if "message" in update:
-                    return update["message"]["text"].strip().lower()
+        if update["update_id"] != last_update_id:
+            last_update_id = update["update_id"]
+
+            if "message" in update:
+                return update["message"]["text"].strip().lower()
 
     except Exception as e:
         print("Telegram fout:", e)
