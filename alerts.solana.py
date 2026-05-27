@@ -232,16 +232,17 @@ def main():
                     status = "▶️ actief" if trading_active else "⏸ gepauzeerd"
 
                     bericht = (
-                        f"*Solana {now}:*\n\n"
-                        f"*Koers:* €{sol_price:.2f}\n"
-                        f"*Signaal:* {signaal} — {uitleg}\n\n"
-                        f"*SOL trend:* {sol_trend}\n"
-                        f"*BTC trend:* {btc_trend}\n"
-                        f"*ETH trend:* {eth_trend}\n\n"
-                        f"*Support:* €{support:.2f} ({afstand_support:+.2f}%)\n"
-                        f"*Resistance:* €{resistance:.2f} ({afstand_resistance:+.2f}%)\n\n"
-                        f"*Bot is {status}*"
-                    )
+    f"*Solana {now}:*\n\n"
+    f"*Koers:* €{sol_price:.2f}\n"
+    f"*Signaal:* {signaal} — {uitleg}\n\n"
+    f"*SOL trend:* {sol_trend}\n"
+    f"*BTC trend:* {btc_trend}\n"
+    f"*ETH trend:* {eth_trend}\n\n"
+    f"*Support:* €{support:.2f} ({afstand_support:+.2f}%)\n"
+    f"*Resistance:* €{resistance:.2f} ({afstand_resistance:+.2f}%)\n\n"
+    f"*Bot is {status}*"
+)
+
 
                     send(bericht)
 
