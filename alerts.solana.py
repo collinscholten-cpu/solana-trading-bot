@@ -144,6 +144,7 @@ def buy_all():
             "side": "buy",
             "orderType": "market",
             "amountQuote": str(eur)
+            "clientOrderId": str(int(time.time() * 1000))
         }
 
         response = bitvavo_request("POST", "/v2/order", body)
