@@ -126,11 +126,10 @@ def buy_all():
 
         response = bitvavo_request("POST", "/v2/order", body)
         send(f"BUY response:\n{response}")
-
-        if response.get("status") == "filled":
-            last_buy_price = price
-            last_action = "BUY"
-            trade_log.append(f"BUY €{eur} @ {price:.2f}")
+        
+        last_buy_price = price
+        last_action = "BUY"
+        trade_log.append(f"BUY €{eur} @ {price:.2f}")
 
 # =============================
 # SELL
