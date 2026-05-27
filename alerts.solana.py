@@ -192,7 +192,7 @@ def main():
     while True:
         try:
             msg = check_messages()
-
+            print("DEBUG ontvangen:", msg)
             # STOP-LOSS
             if last_buy_price:
                 if get_price() < last_buy_price * (1 - STOP_LOSS_PERCENT):
