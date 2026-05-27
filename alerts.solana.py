@@ -9,7 +9,7 @@ from pycoingecko import CoinGeckoAPI
 from dotenv import load_dotenv
 
 # =============================
-# ✅ LOAD ENV (lokaal + Railway)
+# ✅ LOAD ENV
 # =============================
 load_dotenv()
 
@@ -24,6 +24,10 @@ last_update_id = None
 trading_active = True
 trade_log = []
 
+# ✅ NIEUW
+last_buy_price = None
+STOP_LOSS_PERCENT = 0.04
+
 # =============================
 # 📩 TELEGRAM SEND
 # =============================
@@ -37,7 +41,7 @@ def send(message):
     requests.post(url, data=payload)
 
 # =============================
-# 📥 TELEGRAM MESSAGES
+# 📥 TELEGRAM
 # =============================
 def check_messages():
     global last_update_id
@@ -56,6 +60,11 @@ def check_messages():
             last_update_id = update["update_id"]
 
             if "message" in update:
+                chat_id = str(update["message"]["chat"]["id"])
+
+                if chat_id != TELEGRAM_CHAT_ID:
+                    return None
+
                 return update["message"]["text"].strip().lower()
 
     except Exception as e:
@@ -64,7 +73,7 @@ def check_messages():
     return None
 
 # =============================
-# ✅ BITVAVO API (FIXED)
+# ✅ BITVAVO REQUEST
 # =============================
 def bitvavo_request(method, endpoint, body=None):
     timestamp = str(int(time.time() * 1000))
@@ -120,55 +129,87 @@ def bepaal_trend(prices):
     return "neutraal"
 
 # =============================
-# 🧠 SIGNALEN
+# 🧠 SIGNALEN (SLIMMER + VEILIG)
 # =============================
 def bepaal_signaal(prices, sol_trend, btc_trend):
+    current = prices[-1]
     support = min(prices[-20:])
     resistance = max(prices[-20:])
 
+    afstand_support = (current - support) / support * 100
+    afstand_resistance = (resistance - current) / current * 100
+
+    near_support = afstand_support < 2
+    near_resistance = afstand_resistance < 2
+
+    # ✅ SLIMME BUY (MET EXTRA VEILIGHEID)
+    if near_support and btc_trend != "dalend" and sol_trend != "dalend":
+        return "BUY", "Goede prijs nabij support", support, resistance
+
     if sol_trend == "stijgend" and btc_trend == "stijgend":
-        return "BUY", "Sterke markt", support, resistance
+        return "BUY", "Trend omhoog", support, resistance
+
+    if btc_trend == "dalend" and near_resistance:
+        return "SELL", "Topbereik in zwakke markt", support, resistance
 
     if btc_trend == "dalend":
         return "SELL", "Markt zwak", support, resistance
 
-    return "SELL", "Onzeker", support, resistance
+    return "WAIT", "Geen duidelijke setup", support, resistance
 
 # =============================
 # ✅ BUY
 # =============================
 def buy_all():
+    global last_buy_price
+
     balances = bitvavo_request("GET", "/v2/balance")
     eur = next((float(b['available']) for b in balances if b['symbol'] == 'EUR'), 0)
 
     if eur > 5:
+        price = get_price()
+
         body = {
             "market": "SOL-EUR",
             "side": "buy",
             "orderType": "market",
             "amountQuote": str(eur)
         }
+
         bitvavo_request("POST", "/v2/order", body)
-        trade_log.append(f"BUY €{eur} @ {datetime.now().strftime('%H:%M')}")
-        send("✅ BUY uitgevoerd")
+
+        last_buy_price = price
+
+        trade_log.append(f"BUY €{eur} @ {price:.2f}")
+
+        send(f"✅ BUY @ €{price:.2f}\nStop-loss actief (-4%)")
 
 # =============================
 # ✅ SELL
 # =============================
 def sell_all():
+    global last_buy_price
+
     balances = bitvavo_request("GET", "/v2/balance")
     sol = next((float(b['available']) for b in balances if b['symbol'] == 'SOL'), 0)
 
     if sol > 0.01:
+        price = get_price()
+
         body = {
             "market": "SOL-EUR",
             "side": "sell",
             "orderType": "market",
             "amount": str(sol)
         }
+
         bitvavo_request("POST", "/v2/order", body)
-        trade_log.append(f"SELL {sol} SOL @ {datetime.now().strftime('%H:%M')}")
-        send("✅ SELL uitgevoerd")
+
+        trade_log.append(f"SELL @ €{price:.2f}")
+
+        last_buy_price = None
+
+        send(f"✅ SELL @ €{price:.2f}")
 
 # =============================
 # 🔁 MAIN LOOP
@@ -176,31 +217,23 @@ def sell_all():
 def main():
     global trading_active
 
-    send(
-        "🤖 Auto-trading bot actief!\n\n"
-        "Commando's:\n"
-        "/update — stand van zaken\n"
-        "/saldo — check saldo\n"
-        "/log — trades\n"
-        "/stop — pauze\n"
-        "/start — hervatten"
-    )
+    send("🤖 Bot live met stop-loss!")
 
     while True:
         try:
             msg = check_messages()
 
+            # ✅ STOP-LOSS CHECK
+            if last_buy_price:
+                current_price = get_price()
+
+                if current_price < last_buy_price * (1 - STOP_LOSS_PERCENT):
+                    send(f"🚨 STOP-LOSS geraakt!\nVerkoop bij €{current_price:.2f}")
+                    sell_all()
+
             if msg:
 
-                if msg == "/stop":
-                    trading_active = False
-                    send("⏸ Bot gepauzeerd")
-
-                elif msg == "/start":
-                    trading_active = True
-                    send("▶️ Bot actief")
-
-                elif msg == "/saldo":
+                if msg == "/saldo":
                     balances = bitvavo_request("GET", "/v2/balance")
                     text = "\n".join(
                         [f"{b['symbol']}: {b['available']}" for b in balances if float(b['available']) > 0]
@@ -225,26 +258,18 @@ def main():
                         sol_prices, sol_trend, btc_trend
                     )
 
-                    signaal = "🟢 BUY" if advies == "BUY" else "🔴 SELL"
-
-                    afstand_support = (sol_price - support) / support * 100
-                    afstand_resistance = (resistance - sol_price) / sol_price * 100
+                    signaal = "🟢 BUY" if advies == "BUY" else ("🔴 SELL" if advies == "SELL" else "⏸ WAIT")
 
                     now = datetime.now().strftime("%d-%m-%Y %H:%M")
-                    status = "▶️ actief" if trading_active else "⏸ gepauzeerd"
 
                     bericht = (
-    f"*Solana {now}:*\n\n"
-    f"*Koers:* €{sol_price:.2f}\n"
-    f"*Signaal:* {signaal} — {uitleg}\n\n"
-    f"*SOL trend:* {sol_trend}\n"
-    f"*BTC trend:* {btc_trend}\n"
-    f"*ETH trend:* {eth_trend}\n\n"
-    f"*Support:* €{support:.2f} ({afstand_support:+.2f}%)\n"
-    f"*Resistance:* €{resistance:.2f} ({afstand_resistance:+.2f}%)\n\n"
-    f"*Bot is {status}*"
-)
-
+                        f"*Solana {now}:*\n\n"
+                        f"*Koers:* €{sol_price:.2f}\n"
+                        f"*Signaal:* {signaal} — {uitleg}\n\n"
+                        f"*SOL trend:* {sol_trend}\n"
+                        f"*BTC trend:* {btc_trend}\n"
+                        f"*ETH trend:* {eth_trend}\n"
+                    )
 
                     send(bericht)
 
@@ -257,10 +282,8 @@ def main():
         except Exception as e:
             print("Fout:", e)
 
-        time.sleep(10)
+        time.sleep(5)
 
-# =============================
 # ▶️ START
-# =============================
 if __name__ == "__main__":
     main()
