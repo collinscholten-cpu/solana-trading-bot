@@ -189,7 +189,6 @@ def main():
             if trading_active:
 
                 if advies == "BUY" and last_buy_price is None and last_action != "BUY":
-                    send("🤖 AUTO BUY")
                     last_buy_price = get_price()   # ✅ LOCK VOORAF
                     last_action = "BUY"
                     send("🤖 AUTO BUY")
