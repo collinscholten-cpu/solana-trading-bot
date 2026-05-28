@@ -150,7 +150,7 @@ def buy_all():
             "market": "SOL-EUR",
             "side": "buy",
             "orderType": "market",
-            "amountQuote": str(eur)
+            "amountQuote": str(eur),
             "operatorId": str(int(time.time() * 1000))
         }
 
