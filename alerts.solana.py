@@ -277,7 +277,7 @@ def main():
         except Exception as e:
             print("Fout:", e)
 
-        time.sleep(30)
+        time.sleep(15)
 
 # =============================
 # START
