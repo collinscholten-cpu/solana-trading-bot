@@ -163,8 +163,8 @@ def sell_all():
     global last_buy_price
 
     _, sol = get_balances()
-
-    if sol > 0.01:
+    send(f"DEBUG SELL: SOL={sol}")
+    if sol > 0:
         price = get_price()
 
         body = {
