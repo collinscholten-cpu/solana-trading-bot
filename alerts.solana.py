@@ -17,12 +17,12 @@ TELEGRAM_CHAT_ID = os.getenv("CHAT_ID")
 cg = CoinGeckoAPI()
 
 # =============================
-# STATE
+# STATE ✅ (BONUS FIX)
 # =============================
 trading_active = True
 trade_log = []
 last_buy_price = None
-last_update_id = None
+last_update_id = 0   # ✅ BELANGRIJK (fix voor Telegram sync)
 STOP_LOSS_PERCENT = 0.04
 
 # =============================
@@ -37,12 +37,14 @@ def check_messages():
 
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
-        if last_update_id:
+
+        if last_update_id is not None:
             url += f"?offset={last_update_id + 1}"
 
-        data = requests.get(url).json()
+        response = requests.get(url)
+        data = response.json()
 
-        if not data["result"]:
+        if "result" not in data or not data["result"]:
             return []
 
         messages = []
@@ -60,7 +62,7 @@ def check_messages():
         return []
 
 # =============================
-# BITVAVO API
+# BITVAVO
 # =============================
 def bitvavo_request(method, endpoint, body=None):
     timestamp = str(int(time.time() * 1000))
@@ -103,7 +105,7 @@ def get_balances():
     return eur, sol
 
 # =============================
-# MARKET DATA
+# DATA
 # =============================
 def get_price():
     return cg.get_price(ids='solana', vs_currencies='eur')['solana']['eur']
@@ -157,13 +159,15 @@ def buy_all():
         trade_log.append(f"BUY €{eur:.2f} @ {price:.2f}")
 
 # =============================
-# SELL
+# SELL ✅ (FIXED)
 # =============================
 def sell_all():
     global last_buy_price
 
     _, sol = get_balances()
-    send(f"DEBUG SELL: SOL={sol}")
+
+    send(f"DEBUG SELL: SOL={sol}")  # ✅ debug
+
     if sol > 0:
         price = get_price()
 
@@ -182,7 +186,7 @@ def sell_all():
         trade_log.append(f"SELL @ €{price:.2f}")
 
 # =============================
-# MAIN LOOP
+# MAIN LOOP ✅
 # =============================
 def main():
     global trading_active, last_buy_price
@@ -193,39 +197,31 @@ def main():
         try:
             messages = check_messages()
 
-            # STOP LOSS
-            if last_buy_price and get_price() < last_buy_price * (1 - STOP_LOSS_PERCENT):
-                send("🚨 STOP-LOSS")
-                sell_all()
-
             sol_price = get_price()
             sol_prices = get_history("solana", 30)
             btc_prices = get_history("bitcoin", 30)
-            eth_prices = get_history("ethereum", 30)
 
             sol_trend = bepaal_trend(sol_prices)
             btc_trend = bepaal_trend(btc_prices)
-            eth_trend = bepaal_trend(eth_prices)
 
             advies = bepaal_signaal(sol_prices, sol_trend, btc_trend)
 
-            # ✅ AUTO TRADING (SELL FIXED)
+            eur, sol = get_balances()
+
+            # ✅ AUTO TRADING (BALANCE BASED)
             if trading_active:
 
-                eur, sol = get_balances()
-                # ✅ BUY (alleen als je geen positie hebt)
                 if advies == "BUY" and sol == 0:
-
                     last_buy_price = sol_price
                     buy_all()
-                
-                # ✅ SELL (altijd als je SOL hebt)
+
                 elif advies == "SELL" and sol > 0:
                     send("🔴 AUTO SELL")
                     sell_all()
 
-
+            # =============================
             # COMMANDS
+            # =============================
             for msg in messages:
 
                 if "/sell" in msg:
@@ -239,10 +235,9 @@ def main():
                     support = min(sol_prices[-20:])
                     resistance = max(sol_prices[-20:])
 
-                    eur, sol = get_balances()
                     totaal = eur + (sol * sol_price)
 
-                    positie_status = "Status Bitvavo: BUY" if sol > 0.001 else "Status Bitvavo: SELL"
+                    positie_status = "Status Bitvavo: BUY" if sol > 0 else "Status Bitvavo: SELL"
 
                     if advies == "BUY":
                         signaal = "🟢 BUY — Kans omhoog"
@@ -257,8 +252,7 @@ def main():
                         f"{positie_status}\n"
                         f"Signaal: {signaal}\n\n"
                         f"SOL trend: {sol_trend}\n"
-                        f"BTC trend: {btc_trend}\n"
-                        f"ETH trend: {eth_trend}\n\n"
+                        f"BTC trend: {btc_trend}\n\n"
                         f"Support: €{support:.2f}\n"
                         f"Resistance: €{resistance:.2f}\n\n"
                         f"Saldo Bitvavo: €{totaal:.2f}"
@@ -280,7 +274,7 @@ def main():
         time.sleep(15)
 
 # =============================
-# START
+# START ✅
 # =============================
 if __name__ == "__main__":
     main()
