@@ -22,11 +22,15 @@ cg = CoinGeckoAPI()
 trading_active = True
 last_buy_price = None
 last_buy_time = 0
+highest_price = 0
 last_update_id = 0
 
 STOP_LOSS_PERCENT = 0.04
-TAKE_PROFIT_PERCENT = 0.01
 MIN_HOLD_TIME = 120
+
+# ✅ TRAILING SETTINGS
+TRAILING_TRIGGER = 0.01   # vanaf +1% begint tracking
+TRAILING_DROP = 0.004     # 0.4% daling vanaf top = SELL
 
 # =============================
 # TELEGRAM
@@ -103,7 +107,7 @@ def get_balances():
     return eur, sol
 
 # =============================
-# MARKET DATA
+# DATA
 # =============================
 def get_price():
     return cg.get_price(ids="solana", vs_currencies="eur")["solana"]["eur"]
@@ -135,7 +139,7 @@ def bepaal_signaal(prices, sol_trend, btc_trend):
 # BUY
 # =============================
 def buy_all():
-    global last_buy_price, last_buy_time
+    global last_buy_price, last_buy_time, highest_price
 
     eur, _ = get_balances()
 
@@ -154,12 +158,13 @@ def buy_all():
 
         last_buy_price = price
         last_buy_time = time.time()
+        highest_price = price
 
 # =============================
 # SELL
 # =============================
 def sell_all(reason="SELL"):
-    global last_buy_price
+    global last_buy_price, highest_price
 
     _, sol = get_balances()
 
@@ -177,21 +182,21 @@ def sell_all(reason="SELL"):
         send(f"{reason}\nSELL response:\n{response}")
 
         last_buy_price = None
+        highest_price = 0
 
 # =============================
-# MAIN LOOP ✅ (FIXED!)
+# MAIN
 # =============================
 def main():
-    global trading_active, last_buy_price
+    global trading_active, last_buy_price, highest_price
 
     send("🤖 Bot live 🚀")
 
     while True:
         try:
-            # ✅ ALTIJD EERST TELEGRAM
+            # ✅ TELEGRAM EERST
             messages = check_messages()
 
-            # ✅ DIRECT COMMANDS
             for msg in messages:
 
                 if "/update" in msg:
@@ -221,7 +226,7 @@ def main():
                     trading_active = True
                     send("▶️ Bot actief")
 
-            # ✅ MARKET ANALYSE
+            # ✅ DATA
             sol_price = get_price()
             sol_prices = get_history("solana", 30)
             btc_prices = get_history("bitcoin", 30)
@@ -232,25 +237,37 @@ def main():
             advies = bepaal_signaal(sol_prices, sol_trend, btc_trend)
 
             eur, sol = get_balances()
-
             time_since_buy = time.time() - last_buy_time if last_buy_time else 0
 
+            # =============================
             # ✅ AUTO TRADING
+            # =============================
             if trading_active:
 
                 # BUY
                 if advies == "BUY" and sol == 0:
                     buy_all()
 
-                # TAKE PROFIT
-                elif sol > 0 and last_buy_price and sol_price > last_buy_price * (1 + TAKE_PROFIT_PERCENT):
-                    sell_all("💰 TAKE PROFIT")
-
                 # STOP LOSS
                 elif sol > 0 and last_buy_price and sol_price < last_buy_price * (1 - STOP_LOSS_PERCENT):
                     sell_all("🚨 STOP LOSS")
 
-                # SIGNAL SELL
+                # TRAILING PROFIT ✅
+                elif sol > 0 and last_buy_price:
+
+                    # nieuwe top?
+                    if sol_price > highest_price:
+                        highest_price = sol_price
+
+                    winst = (sol_price / last_buy_price) - 1
+
+                    if winst > TRAILING_TRIGGER:
+                        daling = (highest_price - sol_price) / highest_price
+
+                        if daling > TRAILING_DROP:
+                            sell_all("💰 TRAILING PROFIT")
+
+                # SELL SIGNaal
                 elif advies == "SELL" and sol > 0 and time_since_buy > MIN_HOLD_TIME:
                     sell_all("🔴 SIGNAL SELL")
 
@@ -260,7 +277,7 @@ def main():
         time.sleep(15)
 
 # =============================
-# START ✅
+# START
 # =============================
 if __name__ == "__main__":
     main()
