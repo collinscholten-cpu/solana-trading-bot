@@ -213,7 +213,7 @@ def main():
             if trading_active:
 
                 eur, sol = get_balances()
-                ✅ BUY (alleen als je geen positie hebt)
+                # ✅ BUY (alleen als je geen positie hebt)
                 if advies == "BUY" and sol == 0:
 
                     last_buy_price = sol_price
