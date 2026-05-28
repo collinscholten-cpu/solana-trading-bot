@@ -212,13 +212,18 @@ def main():
             # ✅ AUTO TRADING (SELL FIXED)
             if trading_active:
 
-                if advies == "BUY" and last_buy_price is None:
+                eur, sol = get_balances()
+                ✅ BUY (alleen als je geen positie hebt)
+                if advies == "BUY" and sol == 0:
+
                     last_buy_price = sol_price
                     buy_all()
-
-                elif advies == "SELL" and last_buy_price is not None:
+                
+                # ✅ SELL (altijd als je SOL hebt)
+                elif advies == "SELL" and sol > 0:
                     send("🔴 AUTO SELL")
                     sell_all()
+
 
             # COMMANDS
             for msg in messages:
