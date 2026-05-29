@@ -20,17 +20,15 @@ cg = CoinGeckoAPI()
 # STATE
 # =============================
 trading_active = True
+trade_log = []
+last_update_id = None
+
 last_buy_price = None
-last_buy_time = 0
-highest_price = 0
-last_update_id = 0
+highest_price = None
 
 STOP_LOSS_PERCENT = 0.04
-MIN_HOLD_TIME = 120
-
-# ✅ TRAILING SETTINGS
-TRAILING_TRIGGER = 0.01   # vanaf +1% begint tracking
-TRAILING_DROP = 0.004     # 0.4% daling vanaf top = SELL
+TAKE_PROFIT_TRIGGER = 0.02   # +2%
+TRAILING_STOP = 0.01         # -1% vanaf top
 
 # =============================
 # TELEGRAM
@@ -44,11 +42,13 @@ def check_messages():
 
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
-        url += f"?offset={last_update_id + 1}"
+
+        if last_update_id:
+            url += f"?offset={last_update_id + 1}"
 
         data = requests.get(url).json()
 
-        if "result" not in data or not data["result"]:
+        if not data["result"]:
             return []
 
         messages = []
@@ -61,8 +61,7 @@ def check_messages():
 
         return messages
 
-    except Exception as e:
-        print("Telegram fout:", e)
+    except:
         return []
 
 # =============================
@@ -91,12 +90,14 @@ def bitvavo_request(method, endpoint, body=None):
     url = "https://api.bitvavo.com" + endpoint
 
     if method == "GET":
-        return requests.get(url, headers=headers).json()
+        r = requests.get(url, headers=headers)
     else:
-        return requests.post(url, headers=headers, json=body).json()
+        r = requests.post(url, headers=headers, json=body)
+
+    return r.json()
 
 # =============================
-# BALANCES
+# BALANCE
 # =============================
 def get_balances():
     balances = bitvavo_request("GET", "/v2/balance")
@@ -113,7 +114,7 @@ def get_price():
     return cg.get_price(ids="solana", vs_currencies="eur")["solana"]["eur"]
 
 def get_history(coin, days):
-    data = cg.get_coin_market_chart_by_id(id=coin, vs_currency='eur', days=days)
+    data = cg.get_coin_market_chart_by_id(id=coin, vs_currency="eur", days=days)
     return [p[1] for p in data["prices"]]
 
 def bepaal_trend(prices):
@@ -139,7 +140,7 @@ def bepaal_signaal(prices, sol_trend, btc_trend):
 # BUY
 # =============================
 def buy_all():
-    global last_buy_price, last_buy_time, highest_price
+    global last_buy_price, highest_price
 
     eur, _ = get_balances()
 
@@ -158,16 +159,17 @@ def buy_all():
         send(f"BUY response:\n{response}")
 
         last_buy_price = price
-        last_buy_time = time.time()
-        highest_price = price
+        highest_price = None
 
 # =============================
 # SELL
 # =============================
-def sell_all(reason="SELL"):
+def sell_all():
     global last_buy_price, highest_price
 
     _, sol = get_balances()
+
+    send(f"DEBUG SELL: SOL={sol}")
 
     if sol > 0:
         price = get_price()
@@ -176,14 +178,15 @@ def sell_all(reason="SELL"):
             "market": "SOL-EUR",
             "side": "sell",
             "orderType": "market",
-            "amount": str(sol)
+            "amount": str(sol),
+            "operatorId": str(int(time.time() * 1000))
         }
 
         response = bitvavo_request("POST", "/v2/order", body)
-        send(f"{reason}\nSELL response:\n{response}")
+        send(f"SELL response:\n{response}")
 
         last_buy_price = None
-        highest_price = 0
+        highest_price = None
 
 # =============================
 # MAIN
@@ -195,29 +198,68 @@ def main():
 
     while True:
         try:
-            # ✅ TELEGRAM EERST
             messages = check_messages()
 
+            sol_price = get_price()
+            sol_prices = get_history("solana", 30)
+            btc_prices = get_history("bitcoin", 30)
+            eth_prices = get_history("ethereum", 30)
+
+            sol_trend = bepaal_trend(sol_prices)
+            btc_trend = bepaal_trend(btc_prices)
+
+            advies = bepaal_signaal(sol_prices, sol_trend, btc_trend)
+
+            eur, sol = get_balances()
+
+            # =============================
+            # ✅ AUTO TRADING
+            # =============================
+            if trading_active:
+
+                # BUY
+                if advies == "BUY" and sol == 0:
+                    last_buy_price = sol_price
+                    buy_all()
+
+                # SELL signaal
+                elif advies == "SELL" and sol > 0:
+                    send("🔴 SIGNAL SELL")
+                    sell_all()
+
+                # ✅ TRAILING PROFIT
+                if last_buy_price and sol > 0:
+
+                    if not highest_price:
+                        highest_price = sol_price
+
+                    if sol_price > highest_price:
+                        highest_price = sol_price
+
+                    if highest_price >= last_buy_price * (1 + TAKE_PROFIT_TRIGGER):
+
+                        if sol_price <= highest_price * (1 - TRAILING_STOP):
+                            send("💰 TAKE PROFIT SELL")
+                            sell_all()
+
+            # =============================
+            # COMMANDS
+            # =============================
             for msg in messages:
 
                 if "/update" in msg:
-                    now = time.strftime("%d-%m-%Y %H:%M")
-
-                    eur, sol = get_balances()
-                    sol_price = get_price()
-
                     totaal = eur + (sol * sol_price)
                     status = "BUY" if sol > 0 else "SELL"
 
                     send(
-                        f"Solana {now}\n\n"
                         f"Koers: €{sol_price:.2f}\n"
                         f"Status Bitvavo: {status}\n"
                         f"Saldo: €{totaal:.2f}"
                     )
 
                 elif "/sell" in msg:
-                    sell_all("⚡ HANDMATIG")
+                    send("⚡ Handmatige SELL")
+                    sell_all()
 
                 elif "/stop" in msg:
                     trading_active = False
@@ -227,53 +269,8 @@ def main():
                     trading_active = True
                     send("▶️ Bot actief")
 
-            # ✅ DATA
-            sol_price = get_price()
-            sol_prices = get_history("solana", 30)
-            btc_prices = get_history("bitcoin", 30)
-
-            sol_trend = bepaal_trend(sol_prices)
-            btc_trend = bepaal_trend(btc_prices)
-
-            advies = bepaal_signaal(sol_prices, sol_trend, btc_trend)
-
-            eur, sol = get_balances()
-            time_since_buy = time.time() - last_buy_time if last_buy_time else 0
-
-            # =============================
-            # ✅ AUTO TRADING
-            # =============================
-            if trading_active:
-
-                # BUY
-                if advies == "BUY" and sol == 0:
-                    buy_all()
-
-                # STOP LOSS
-                elif sol > 0 and last_buy_price and sol_price < last_buy_price * (1 - STOP_LOSS_PERCENT):
-                    sell_all("🚨 STOP LOSS")
-
-                # TRAILING PROFIT ✅
-                elif sol > 0 and last_buy_price:
-
-                    # nieuwe top?
-                    if sol_price > highest_price:
-                        highest_price = sol_price
-
-                    winst = (sol_price / last_buy_price) - 1
-
-                    if winst > TRAILING_TRIGGER:
-                        daling = (highest_price - sol_price) / highest_price
-
-                        if daling > TRAILING_DROP:
-                            sell_all("💰 TRAILING PROFIT")
-
-                # SELL SIGNaal
-                elif advies == "SELL" and sol > 0 and time_since_buy > MIN_HOLD_TIME:
-                    sell_all("🔴 SIGNAL SELL")
-
         except Exception as e:
-            print("FOUT:", e)
+            print("Fout:", e)
 
         time.sleep(15)
 
