@@ -6,6 +6,7 @@ import hashlib
 import json
 from pycoingecko import CoinGeckoAPI
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -20,15 +21,17 @@ cg = CoinGeckoAPI()
 # STATE
 # =============================
 trading_active = True
-trade_log = []
 last_update_id = None
 
 last_buy_price = None
 highest_price = None
+market_mode = "neutraal"
 
 STOP_LOSS_PERCENT = 0.04
-TAKE_PROFIT_TRIGGER = 0.02   # +2%
-TRAILING_STOP = 0.01         # -1% vanaf top
+TAKE_PROFIT_TRIGGER = 0.02
+TRAILING_STOP = 0.01
+
+last_analysis_day = None
 
 # =============================
 # TELEGRAM
@@ -70,7 +73,6 @@ def check_messages():
 def bitvavo_request(method, endpoint, body=None):
     timestamp = str(int(time.time() * 1000))
     body_str = json.dumps(body, separators=(',', ':')) if body else ""
-
     message = timestamp + method + endpoint + body_str
 
     signature = hmac.new(
@@ -137,6 +139,43 @@ def bepaal_signaal(prices, sol_trend, btc_trend):
     return "WAIT"
 
 # =============================
+# ANALYSE
+# =============================
+def analyse_market():
+    global market_mode
+
+    sol_prices_7 = get_history("solana", 7)
+    sol_prices_30 = get_history("solana", 30)
+
+    price = sol_prices_7[-1]
+
+    change_7d = ((price - sol_prices_7[0]) / sol_prices_7[0]) * 100
+    change_30d = ((price - sol_prices_30[0]) / sol_prices_30[0]) * 100
+
+    trend_7d = bepaal_trend(sol_prices_7)
+    trend_30d = bepaal_trend(sol_prices_30)
+
+    # ✅ MARKET MODE
+    if trend_30d == "dalend":
+        market_mode = "bearish"
+    elif trend_30d == "stijgend":
+        market_mode = "bullish"
+    else:
+        market_mode = "neutraal"
+
+    bericht = (
+        f"📊 Daganalyse Solana\n\n"
+        f"Koers: €{price:.2f}\n"
+        f"7 dagen: {change_7d:.2f}%\n"
+        f"30 dagen: {change_30d:.2f}%\n\n"
+        f"Trend 7d: {trend_7d}\n"
+        f"Trend 30d: {trend_30d}\n\n"
+        f"Market mode: {market_mode}\n"
+    )
+
+    return bericht
+
+# =============================
 # BUY
 # =============================
 def buy_all():
@@ -169,8 +208,6 @@ def sell_all():
 
     _, sol = get_balances()
 
-    send(f"DEBUG SELL: SOL={sol}")
-
     if sol > 0:
         price = get_price()
 
@@ -192,18 +229,28 @@ def sell_all():
 # MAIN
 # =============================
 def main():
-    global trading_active, last_buy_price, highest_price
+    global trading_active, last_buy_price, highest_price, last_analysis_day
 
     send("🤖 Bot live 🚀")
 
     while True:
         try:
+            now = datetime.now()
+
+            # =============================
+            # ✅ 00:01 DAGELIJKSE ANALYSE
+            # =============================
+            if now.hour == 0 and now.minute == 1:
+                if last_analysis_day != now.day:
+                    analysis = analyse_market()
+                    send(analysis)
+                    last_analysis_day = now.day
+
             messages = check_messages()
 
             sol_price = get_price()
             sol_prices = get_history("solana", 30)
             btc_prices = get_history("bitcoin", 30)
-            eth_prices = get_history("ethereum", 30)
 
             sol_trend = bepaal_trend(sol_prices)
             btc_trend = bepaal_trend(btc_prices)
@@ -213,18 +260,19 @@ def main():
             eur, sol = get_balances()
 
             # =============================
-            # ✅ AUTO TRADING
+            # ✅ AUTO TRADING (MET MARKET MODE)
             # =============================
             if trading_active:
 
-                # BUY
+                # BUY (gebonden aan market_mode)
                 if advies == "BUY" and sol == 0:
-                    last_buy_price = sol_price
-                    buy_all()
+
+                    if market_mode != "bearish":
+                        last_buy_price = sol_price
+                        buy_all()
 
                 # SELL signaal
                 elif advies == "SELL" and sol > 0:
-                    send("🔴 SIGNAL SELL")
                     sell_all()
 
                 # ✅ TRAILING PROFIT
@@ -247,27 +295,22 @@ def main():
             # =============================
             for msg in messages:
 
-                if "/update" in msg:
+                if "/analyse" in msg:
+                    send(analyse_market())
+
+                elif "/update" in msg:
                     totaal = eur + (sol * sol_price)
                     status = "BUY" if sol > 0 else "SELL"
 
                     send(
                         f"Koers: €{sol_price:.2f}\n"
-                        f"Status Bitvavo: {status}\n"
-                        f"Saldo: €{totaal:.2f}"
+                        f"Status: {status}\n"
+                        f"Saldo: €{totaal:.2f}\n"
+                        f"Market mode: {market_mode}"
                     )
 
                 elif "/sell" in msg:
-                    send("⚡ Handmatige SELL")
                     sell_all()
-
-                elif "/stop" in msg:
-                    trading_active = False
-                    send("⏸ Bot gepauzeerd")
-
-                elif "/start" in msg:
-                    trading_active = True
-                    send("▶️ Bot actief")
 
         except Exception as e:
             print("Fout:", e)
